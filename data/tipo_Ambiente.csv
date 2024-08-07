@@ -1,0 +1,33 @@
+"tipo_ambiente","codigo_tipo_ambiente","fluxo","sazonalidade","inundação",,"Livro Pantanal",,,,
+"campo alagável","cal","lentico","temporário","chuva",,"tipo_ambiente","codigo_tipo_ambiente","fluxo","sazonalidade","inundação"
+"vazante","vzt","lótico","temporário","chuva",,"campo alagável","cal","lentico","temporário","chuva"
+"lagoa temporária","lgt","lêntico","temporário","chuva",,"vazante","vzt","lótico","temporário","chuva"
+"lagoa permanente","lgp","lêntico","permanente","chuva",,"lagoa temporária","lgt","lêntico","temporário","chuva"
+"lagoa salina","lsl","lêntico","permanente","chuva",,"lagoa permanente","lgp","lêntico","permanente","chuva"
+"campo inundável","cin","lótico","temporário","rio",,"lagoa salina","lsl","lêntico","permanente","chuva"
+"brejo","brj","lêntico","permanente","rio/chuva",,"campo inundável","cin","lótico","temporário","rio"
+"lagoa de meandro","lgm","lêntico","permanente","rio",,"brejo","brj","lêntico","permanente","rio/chuva"
+"coricho","cor","lótico","permanente","rio",,"lagoa de meandro","lgm","lêntico","permanente","rio"
+"corpos d'água artificiais","art","lêntico","permanente","rio/chuva",,"coricho","cor","lótico","permanente","rio"
+"rio permanente","rpt","lótico","permanente","rio",,"corpos d'água artificiais","art","lêntico","permanente","rio/chuva"
+"rio temporário","rtm","lótico","temporário","rio",,"rio permanente","rio permanente","lótico","permanente","rio"
+"córrego/riacho permanente","cpt","lótico","permanente","rio",,"rio temporário","rtm","lótico","temporário","rio"
+"córrego/riacho temporário","ctm","lótico","temporário","rio",,"córrego/riacho permanente","cpt","lótico","permanente","rio"
+"cachoeira/corredeira","chc","lótico","permanente","rio",,"córrego/riacho temporário","ctm","lótico","temporário","rio"
+,,,,,,"cachoeira/corredeira","chc","lótico","permanente","rio"
+"palustre",,,,,,"Baceiro","bac",,,
+"curso d'água",,,,,,"Camalote","cam",,,
+"banhado",,,,,,"meandro","mea",,,
+"mata de galeria",,,,,,"paratudal","pdl",,,
+"interior de floresta",,,,,,"carandazal","czl",,,
+"campo limpo úmido",,,,,,"cajiqueiral","crl",,,
+"pântano",,,,,,"caronal","cnl",,,
+"mata de altitude",,,,,,"caetezal","ctl",,,
+"campo de altitude",,,,,,"taboal","tbl",,,
+"borda de mata",,,,,,"Campo lixeiro","clx",,,
+"represa",,,,,,"veredas","vds",,,
+"lagoa marginal",,,,,,,,,,
+"açude",,,,,,,,,,
+"brejo herbáceo",,,,,,,,,,
+"brejo herbáceo salobro",,,,,,,,,,
+"solo úmido",,,,,,,,,,
