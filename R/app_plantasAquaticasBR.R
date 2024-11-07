@@ -1,13 +1,13 @@
 
 
-#' @title Aplicativo do Catálogo de Plantas Aquáticas do Brasil
+#' @title Aplicativo do Repositório de Dados de Plantas Aquáticas do Brasil
 #' @name plantasAquaticasBR
-#' @description Aplicativo do Catálogo de Plantas Aquáticas do Brasil e Flora & Funga do Brasil
+#' @description Aplicativo Repositório de Dados de Plantas Aquáticas do Brasil, Flora & Funga do Brasil e portaria 443.
 #' @return CSV files
 #' @author Pablo Hendrigo Alves de Melo
-#'        
+#'
 #' @seealso \code{\link[utils]{download.file}}, \code{\link[utils]{aspell}}
-#' 
+#'
 #' @import dplyr
 #' @import tidyr
 #' @import readr
@@ -23,7 +23,8 @@
 #' @import measurements
 #' @import downloader
 #' @import writexl
-#' 
+#' @import parseGBIF
+#'
 #' @examples
 #' \donttest{
 #' app_catalogoPlantasAquaticasBR()
@@ -51,7 +52,8 @@ app_PlantasAquaticasBR <- function()
     require(measurements)
     require(downloader)
     require(writexl)
-    library(glue)
+    require(glue)
+    require(parseGBIF)
     
     options(shiny.maxRequestSize=10000*1024^2) 
     
@@ -458,7 +460,7 @@ app_PlantasAquaticasBR <- function()
           
           # 'Homonyms' ajustar família
           
-          if(x$searchNotes == 'Not found' )
+          if(x$searchNotes == 'Not found' & is.na(word(sp_fb$standardizeName,2))) 
           {
             ### reconhecer genero e familia
             # x <-{}
@@ -785,9 +787,86 @@ app_PlantasAquaticasBR <- function()
       remove(colSearch2)
       
     }
+    
+    # incProgress(0.1, detail = 'CNCFlora - Lista Oficial de Espécies Ameaçadas - Portaria 443...')
+    
+    get_floraAmeacadaBR <- function(url_source = "https://ipt.jbrj.gov.br/jbrj/archive.do?r=lista_oficial_ameacadas_portaria_443",
+                                    path_results = NA)
+      
+    {  
+      
+      destfile <- paste0(path_results,"/IPT_floraAmeacadaBR_",Sys.Date(),'.zip')
+      downloader::download(url = url_source, destfile = destfile, mode = "wb") 
+      utils::unzip(destfile, exdir = path_results) # descompactar e salvar dentro subpasta "ipt" na pasta principal
+      
+      
+      #  taxon
+      taxon  <- readr::read_delim(paste0(path_results,'/taxon.txt'), delim = "\t", quote = "") 
+      
+      
+      taxon$scientificName_U = toupper(taxon$scientificName)
+      
+      distribution.file <- paste0(path_results,"/distribution.txt")
+      distribution <- read_delim(distribution.file, delim = "\t", quote = "") 
+      
+      taXON <- dplyr::left_join(taxon, distribution %>% dplyr::select(id,threatStatus),
+                                by = c('id'))
+      
+      return(taXON)
+      
+    } 
+    
+    categoria_ameaca_flora_Portaria_443 <- function(scientificName_search=c('Justicia ramulosa','Aphelandra margaritae'), 
+                                                    floraAmeacadaBR=NA)
+    {
+      x <- data.frame(categoria_ameaca_flora_Portaria_443=rep('',NROW(scientificName_search)))
+      
+      for(i in 1:NROW(scientificName_search))
+      {
+        index <- floraAmeacadaBR$scientificName %in% scientificName_search[i]
+        
+        if(sum(index)>0){
+          x$categoria_ameaca_flora_Portaria_443[i] <- floraAmeacadaBR$threatStatus[index==TRUE]
+        }
+      }
+      
+      return(x$categoria_ameaca_flora_Portaria_443)
+      
+    }
+    
+    
+    floraAmeacadaBR <<- get_floraAmeacadaBR(path_results = tempdir())
+    
   }
   
   
+   # wcvp_names <<-  parseGBIF::wcvp_get_data(read_only_to_memory = TRUE,
+   #                               load_rda_data = TRUE)$wcvp_names
+  
+  {
+    path_results <- tempdir()
+    destfile <- paste0(path_results,'/wcvp.zip')
+    url_d <- 'https://github.com/pablopains/parseGBIF/raw/main/dataRaw/wcvp_names.zip'
+    
+    downloader::download(url = url_d, destfile = destfile, mode = "wb")
+    utils::unzip(destfile, exdir = path_results)
+    file.name <- paste0(path_results,'/wcvp_names.csv')
+    wcvp_names <- readr::read_csv(file.name,
+                                   locale = readr::locale(encoding = "UTF-8"),
+                                   show_col_types = FALSE) %>% data.frame(stringsAsFactors = FALSE)
+    
+    # names.checked <-  parseGBIF::wcvp_check_name_batch(occ =  data.frame(Ctrl_scientificName = 'Gadenerianangustata',
+    #                                                         Ctrl_taxonRank= 'SPECIES'),
+    #                                        wcvp_names = wcvp_names,
+    #                                        if_author_fails_try_without_combinations = TRUE,
+    #                                        wcvp_selected_fields = 'standard',
+    #                                        silence = FALSE)
+    # 
+    #  names.checked <-  wcvp_check_name2( searchedName= 'Hemistylus brasiliensis Wedd.',
+    #                                                     wcvp_names = wcvp_names)
+  }
+  
+
   #  Tela APP--
   ui <- 
     {
@@ -799,18 +878,23 @@ app_PlantasAquaticasBR <- function()
         
         shinydashboard::dashboardBody(
           
-          navbarPage("Catálogo de Plantas Aquáticas do Brasil",
+          navbarPage("Repositório de Dados de Plantas Aquáticas do Brasil",
                      tabPanel(icon("home"), 
                               box(title = 'Apresentação',
                                   status = "primary",width = 12,
                                   
-                                  helpText('Ferramentas para acessar o repositório de dados do Catálogo de Plantas Aquáticas do Brasil, indexado à Flora & Funga do Brasil!')
+                                  helpText('Plantas aquáticas do Brasil é uma obra produzida por meio de redes colaborativas e iniciativas voluntárias, regidas pelo Núcleo de Especialistas de Plantas Aquáticas, da Sociedade Botânica do Brasil, contando com a participação de mais de 30 cientistas, do Brasil e exterior.'),
+                                  helpText('País com maior biodiversidade do planeta, o Brasil é também líder mundial em espécies de plantas aquáticas e de plantas aquáticas endêmicas. Tamanho patrimônio natural carecia de uma fonte que reunisse informações e análises referentes a todo o território nacional.'),
+                                  helpText('Assim, Plantas Aquáticas do Brasil é um trabalho pioneiro, não apenas pela abrangência nacional, mas também devido à amplitude de sua fundamentação: pela primeira vez na história, foram reunidas informações oriundas de publicações científicas sobre as plantas aquáticas no vasto território brasileiro, como um todo, as quais foram tratadas de forma sistematizada para aberta disponibilização. Para tal, foi concebido o Repositório de Dados de Plantas Aquáticas do Brasil, inédito, específico para o armazenamento, a organização e a sistematização dos parâmetros particulares das plantas aquáticas, visando o gerenciamento das informações obtidas e a ser continuado, ao longo do tempo.'),
+                                  helpText('Nesse cenário, a partir de aproximadamente 200 publicações científicas específicas, historicamente produzidas sobre o tema, foram originados cerca de 25.000 registros de atributos sobre quase 3.000 espécies plantas aquáticas no repositório de dados.'),
+                                  helpText('Diante disso, apresentamos a obra Plantas Aquáticas do Brasil, que vai além de uma simples listagem de espécies de plantas aquáticas no país, promovendo uma circunscrição inédita para esse grupo de organismos, mas também trazendo parâmetros das espécies e dos ambientes em que vivem, bem como contextualizando tais informações no cenário da Flora Brasileira ao se relacionar com o trabalho do Reflora, do Jardim Botânico do Rio de Janeiro.'),
+                                  helpText('Esperamos contribuir com o conhecimento e a conservação das plantas aquáticas no Brasil e dos ambientes em que ocorrem, ao fornecer informações para subsidiar pesquisas básicas e avançadas em diferentes campos da ciência; atividades de ensino diversas; práticas em educação ambiental; trabalhos técnicos em consultoria; além de disponibilizar informações consistentes sobre plantas aquáticas à sociedade de uma forma geral.'),                                  
                                   
                               )),
                      
                      
                      tabPanel(icon("droplet"),
-                              box(title = 'Catálogo de Plantas Aquáticas do Brasil',
+                              box(title = 'Repositório de Dados de Plantas Aquáticas do Brasil',
                                   status = "primary",width = 12,
                                   
                                   # country	stateProvince	municipality	locality
@@ -1043,6 +1127,39 @@ app_PlantasAquaticasBR <- function()
                                   
                               )),
                      
+                     tabPanel(icon("book"),
+                              box(title = 'Naveguação por referências biblioráficas compiladas pelo Repositório de Dados de Plantas Aquáticas do Brasil',
+                                  status = "primary",width = 12,
+                                  
+                                  fluidRow(
+                                    column(
+                                      width = 6,
+                                      box(title = 'Obras',
+                                          status = "primary",width = 12,
+                                          rHandsontableOutput("hot_referencia_key"))),
+                                    
+                                    column(
+                                      width = 6,
+                                      box(title = 'Autores',
+                                          status = "primary",width = 12,
+                                          DT::dataTableOutput('autores_Contents')))),
+                                  
+                                  
+                                  box(title = 'Espécimes',
+                                      status = "primary",width = 12,
+                                      
+                                      DT::dataTableOutput('sumario_hot_referencia_key'),
+                                      
+                                      br(),
+                                      
+                                      DT::dataTableOutput('especimes_referencia_Contents')),
+                                  
+                                  br(),
+                                  downloadButton("downloadData_applyTaxonomicAlignment", "Baixar"),
+                                  # "Rauvolfia andina"
+                                  
+                              )),
+                     
                      
                      tabPanel(icon("spa"),
                               box(title = 'Flora & Funga do Brasil',
@@ -1095,6 +1212,19 @@ app_PlantasAquaticasBR <- function()
                                   
                               )),
                      
+                     tabPanel(icon("hands-holding-circle"),
+                              box(title = 'Lista Oficial de Espécies Ameaçadas - Portaria 443',
+                                  status = "primary",width = 12,
+                                  
+                                  shiny::tags$a('CNCFlora - Lista Oficial de Espécies Ameaçadas - Portaria 443', href = 'https://ipt.jbrj.gov.br/jbrj/resource?r=lista_oficial_ameacadas_portaria_443'),
+
+                                  
+                                  wellPanel(fluidRow(column(
+                                    width = 12,    
+                                    DT::dataTableOutput('floraAmeacadaBRContents'))))
+                                  
+                              )),
+                     
                      tabPanel(icon("magnifying-glass"),
                               box(title = 'Busca por espécies',
                                   status = "primary",width = 12,
@@ -1116,12 +1246,12 @@ app_PlantasAquaticasBR <- function()
                                                 selected = c('FloraFungaBrasil')
                                     ),
                                     br(),
-                                    actionButton("applyTaxonomicAlignment_Btn", "Aplicar alinhamento taxonômico", icon = icon("play")),
+                                    actionButton("applyTaxonomicAlignment_Btn", "Aplicar alinhamento taxonômico com Flora e Funga BR, WCPV e busca em Lista Oficial de Espécies Ameaçadas - Portaria 443", icon = icon("play")),
                                     
                                     br(),
                                     br(),
                                     br(),
-                                    box(title = 'Resultados da busca em Flora & Funga do Brasil',
+                                    box(title = 'Resultados da busca em Flora & Funga do Brasil, WCPV e Lista Oficial de Espécies Ameaçadas - Portaria 443',
                                         status = "primary",width = 12,
                                         DT::dataTableOutput('applyTaxonomicAlignment_Contents'),
                                     ),
@@ -1143,8 +1273,7 @@ app_PlantasAquaticasBR <- function()
                                     
                                     br(),
                                     downloadButton("downloadData_applyTaxonomicAlignment", "Baixar"),
-                                    
-                                    
+
                                   ))
                                   ))),
                      
@@ -1164,7 +1293,7 @@ app_PlantasAquaticasBR <- function()
                                         
                                         helpText("Desenvolvido por: Melo, Pablo Hendrigo Alves de"),
                                         
-                                        helpText("Versão 1.0.0 de agosto/2024"),
+                                        helpText("Versão 1.0.0 de novembro/2024"),
                                         
                                       ))
                                     
@@ -1178,34 +1307,121 @@ app_PlantasAquaticasBR <- function()
   server <- function(input, output, session)
   {
     
+    {
+      
+      output$hot_referencia_key <- renderRHandsontable(
+        {
+          shiny::validate(
+            need(NROW(referencia)>0,  "..."))
+          
+          dt <- referencia %>%
+            dplyr::select(brazilianRegion,
+                          ano,
+                          textReference,
+                          tipo,
+                          id_idioma,        
+                          linque,
+                          Reference,
+                          codigo_referencia,
+                          ano_inicio,
+                          ano_fim)  %>% 
+            dplyr::arrange_at(., c('brazilianRegion','ano','textReference','tipo'))
+          
+          rhandsontable(dt,
+                        row_highlight = 1,
+                        width = '100%', height = 300,
+                        selectionMode = 'single',
+                        selectCallback = TRUE) %>%
+            hot_table(highlightCol = TRUE, highlightRow = TRUE, readOnly = TRUE)
+        })
+      
+      ID_referencia <- function(input)
+      {
+        linha <- input$hot_referencia_key_select$select$r
+        rr <- hot_to_r(input$hot_referencia_key)
+        
+        if ( is.null(linha))
+        {
+          return(rr[1,8])
+        }
+        
+        if ( linha>NROW(rr))
+        {
+          return(rr[1,8])
+        }else
+        {
+          return(rr[linha,8])
+        }
+      }
+      
+      output$autores_Contents <- DT::renderDataTable(options = list(scrollX = TRUE),
+                                                     {
+                                                       shiny::validate(
+                                                         need(NROW(autor_Referencia$codigo_referencia %in% ID_referencia(input))>0,  "..."))
+                                                       
+                                                       index <- autor_Referencia$codigo_referencia %in% ID_referencia(input)
+                                                       
+                                                       autor_Referencia[index==TRUE,] %>%
+                                                         dplyr::arrange_at(.,c('ordem_autoria')) %>%
+                                                         dplyr::select(ultimo_nome,Iniciais,nome_completo)
+                                                     })
+      
+      
+      output$sumario_hot_referencia_key <- DT::renderDataTable(options = list(scrollX = TRUE),
+                                                               {
+                                                                 shiny::validate(
+                                                                   need(NROW(especimes$associatedReference %in% ID_referencia(input))>0,  "..."))
+                                                                 
+                                                                 index <- especimes$associatedReference %in% ID_referencia(input)
+                                                                 
+                                                                 count_col_especimes(index)
+                                                               })
+      
+      output$especimes_referencia_Contents <- DT::renderDataTable(options = list(scrollX = TRUE),
+                                                                  {
+                                                                    shiny::validate(
+                                                                      need(NROW(especimes$associatedReference %in% ID_referencia(input))>0,  "..."))
+                                                                    
+                                                                    index <- especimes$associatedReference %in% ID_referencia(input)
+                                                                    
+                                                                    especimes[index==TRUE,]
+                                                                  })
+      
+      
+    }
+    
     # Taxonomic Alignment
     {
+      
+      output$downloadData_applyTaxonomicAlignment <- downloadHandler(
+        filename = function() {
+          "Flora e Funga BR e Portaria 443.xls"
+        },
+        content = function(file) {
+          
+          writexl::write_xlsx(occ_fb2020, file)
+
+        })
+      
+      
       applyTaxonomicAlignment <- 
         eventReactive(input$applyTaxonomicAlignment_Btn,
                       {
                         {
-                          
-                          
-                          
-                          x <- data.frame(Ctrl_scientificName=input$Long_Text) 
-                          
-                          
-                          # x <- c('Aphelandra longiflora;\nHygrophila costata;\nUtricularia breviscapa;'),
-                          # x <- c('Aphelandra longiflora'),
-                          
+
+                          x <- data.frame(Ctrl_scientificName=input$Long_Text)
                           x <- str_split(x,';', simplify = TRUE)
                           index <- x!=''
                           x <- x[index==TRUE]
                           
-                          occ_all <- data.frame(Ctrl_scientificName=x) 
-                          
+                          occ_all <- data.frame(Ctrl_scientificName=x)
+
                           colnames(occ_all) <- 'Ctrl_scientificName'
-                          
+
                           occ_all$Ctrl_scientificName <- sub('\n','',glue::trim(occ_all$Ctrl_scientificName))
                           
                           name_search_wcvp <- occ_all$Ctrl_scientificName #%>% unique() %>% as.character()
-                          # NROW(name_search_wcvp)
-                          
+
                           occ_all <- occ_all %>%
                             dplyr::mutate(fb2020_taxonID = 0,
                                           fb2020_acceptedNameUsageID = 0,
@@ -1276,6 +1492,8 @@ app_PlantasAquaticasBR <- function()
                                        i <- 3
                                        # i <- 938
                                        
+                                       incProgress(1, detail = 'Flora e Funga do Brasil...')
+                                       
                                        ok <- FALSE
                                        japrocessado <<- rep(FALSE,NROW(name_search_wcvp))
                                        while (i<=NROW(name_search_wcvp) & ok != TRUE)
@@ -1311,7 +1529,28 @@ app_PlantasAquaticasBR <- function()
                                          Sys.sleep(2)
                                        }
                                        
-                                       incProgress(100, detail = '100')
+                                       # fb2020_scientificNamewithoutAuthorship
+                                       
+                                       incProgress(1, detail = 'Ameaçada?')
+                                       
+                                       x$categoria_Ameaca_Portaria_443 <- rep('',NROW(x))
+                                       
+                                       x1 <- categoria_ameaca_flora_Portaria_443(x$fb2020_scientificNamewithoutAuthorship,
+                                                                                floraAmeacadaBR=floraAmeacadaBR)
+                                       x$categoria_Ameaca_Portaria_443 <- x1
+                                       
+                                       incProgress(1, detail = 'WCVP')
+                                       
+                                       names.checked <- wcvp_check_name_batch(occ = occ_all %>% 
+                                                                                dplyr::mutate(Ctrl_taxonRank= rep('SPECIES',NROW(occ_all))),
+                                                                              wcvp_names = wcvp_names,                                                                            if_author_fails_try_without_combinations = TRUE,
+                                                                              wcvp_selected_fields = 'standard',
+                                                                              silence = FALSE)$occ_wcvp_check_name
+                                       
+                                       x <- cbind(x,
+                                                  names.checked)
+                                       
+                                       incProgress(10, detail = 'ok')
                                      })
                         
                         
@@ -1332,16 +1571,18 @@ app_PlantasAquaticasBR <- function()
       
       count_col_especimes <- function(index){
         
-        col_especimes <- c("brazilianRegion",                  "issues",                           "checkFloraBR2020",                
+        col_especimes <- c("brazilianMacrophyteAccess",        "brazilianRegion",                  "issues",                           "checkFloraBR2020",                
                            "notesFloraBR2020",                 "basisOfRecord",                    "collectionCode",                   "catalogNumber",                   
                            "threatStatus",                     "associatedReference",              "textReference",                    "recordedBy",                      
                            "recordNumber",                     "day",                              "month",                            "year",                            
                            "referenceFamily",                  "referenceGenus",                   "referenceIdentificationQualifier",
                            "referenceSpecificEpithet",         "referenceInfraspecificEpithet",    "referenceScientificnameauthor",    
-                           # "typingUpdate"                     "typingUpdateFamily"               "typingUpdateGenus"                "typingUpdateSpecificEpithet"      "typingUpdateInfraspecificEpithet"
-                           # "typingUpdateIdentifiedBy"         "typingUpdatedateIdentified"       "herbariumIdentificationUpdate"    "herbariumFamily"                 
-                           # "herbariumGenus"                   "herbariumIdentificationQualifier" "herbariumSpecificEpithet"         "herbariumInfraspecificEpithet"   
-                           # "herbariumScientificnameauthor"    
+                           
+                           # "typingUpdateFamily",               "typingUpdateGenus",                "typingUpdateSpecificEpithet",      "typingUpdateInfraspecificEpithet",
+                           # "typingUpdateIdentifiedBy",         "typingUpdatedateIdentified",       "herbariumFamily",
+                           # "herbariumGenus",                   "herbariumIdentificationQualifier", "herbariumSpecificEpithet",         "herbariumInfraspecificEpithet",
+                           # "herbariumScientificnameauthor",
+                           
                            "identifiedBy",                     "dateIdentified",                   "country",                         
                            "stateProvince",                    "municipality",                     "locality",                         "decimalLatitude",                 
                            "decimalLongitude",                 "altitude",                         "hydrographicBasin",                "hydrograficSubbasin",             
@@ -1362,10 +1603,10 @@ app_PlantasAquaticasBR <- function()
           df <- data.frame(valores = especimes[index==TRUE,][,col_especimes[i,1]] , stringsAsFactors = FALSE)
           df[,1] <- glue::trim(toupper(df[,1]))
           # df[,1] <- df[,1] %>% dplyr::arrange_all()
-          valores <- df[,1] %>% unique()
+          valores <- df[,1] %>% unique() %>% sort()
           col_especimes$quantidade[i]=NROW(valores)
           
-          if(NROW(valores)<=200){
+          if(NROW(valores)<=500 & col_especimes[i,1]!='brazilianMacrophyteAccess'){
             val<-{}
             for(ii in 1:NROW(valores)){
               if(is.null(val)){
@@ -1496,7 +1737,6 @@ app_PlantasAquaticasBR <- function()
                         selectCallback = TRUE) %>%
             hot_table(highlightCol = TRUE, highlightRow = TRUE, readOnly = TRUE)
         })
-      
       
       ID_familia <- function(input)
       {
@@ -1721,6 +1961,7 @@ app_PlantasAquaticasBR <- function()
                                                                 
                                                                 count_col_especimes(index())
                                                               })
+      
       output$catalogoEspecimesContents <- DT::renderDataTable(options = list(
         columnDefs = list(list(className = 'dt-center', targets = 1)),
         pageLength = 5,
@@ -1742,6 +1983,7 @@ app_PlantasAquaticasBR <- function()
         })
       
     }
+    
     
     # fb2020
     {  
@@ -1899,6 +2141,29 @@ app_PlantasAquaticasBR <- function()
       # output$forMenu2    <- renderUI({createSelectRadio(2)})
     }
     
+    # ameaçadas
+    {
+      
+      
+      output$floraAmeacadaBRContents <- DT::renderDataTable(options = list(
+        columnDefs = list(list(className = 'dt-center', targets = 1)),
+        pageLength = 5,
+        lengthMenu = c(5, 50, 100, 1000),
+        scrollX = TRUE,
+        dom = "Blfrtip", 
+        buttons =
+          list("copy", list(
+            extend = "collection"
+            , buttons = c("csv", "excel", "pdf")
+            , text = "Download"
+          ))),
+        filter = 'top',
+        {
+          floraAmeacadaBR %>% dplyr::select(family, scientificName, threatStatus)
+        })
+      
+    }
+    
   }
   
   # shinyApp(ui = ui, server = server, options = list(launch.browser = TRUE))
@@ -1907,3 +2172,5 @@ app_PlantasAquaticasBR <- function()
 
 
 app_PlantasAquaticasBR()
+
+
